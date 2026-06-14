@@ -5,6 +5,8 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 
 export interface ObsidianVaultMcpStackProps extends cdk.StackProps {
   githubOauthClientId: string;
@@ -54,8 +56,6 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       }),
     );
 
-    // The SSM parameter is stored as a SecureString encrypted with the
-    // AWS-managed key alias/aws/ssm. Grant Decrypt scoped to that use.
     handler.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['kms:Decrypt'],
@@ -66,14 +66,21 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       }),
     );
 
-    const fnUrl = handler.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
+    // API Gateway HTTP API instead of Lambda Function URL: Function URLs
+    // unconditionally rename the WWW-Authenticate response header, which
+    // breaks MCP OAuth discovery for clients.
+    const integration = new HttpLambdaIntegration('McpIntegration', handler);
+    const api = new HttpApi(this, 'McpApi', {
+      defaultIntegration: integration,
+    });
+    api.addRoutes({
+      path: '/{proxy+}',
+      methods: [HttpMethod.ANY],
+      integration,
     });
 
-    handler.addEnvironment('SELF_URL', fnUrl.url);
-
-    new cdk.CfnOutput(this, 'McpEndpoint', { value: fnUrl.url });
-    new cdk.CfnOutput(this, 'GitHubCallbackUrl', { value: `${fnUrl.url}callback` });
+    new cdk.CfnOutput(this, 'McpEndpoint', { value: api.apiEndpoint });
+    new cdk.CfnOutput(this, 'GitHubCallbackUrl', { value: `${api.apiEndpoint}/callback` });
     new cdk.CfnOutput(this, 'GitHubOAuthClientSecretParam', { value: CLIENT_SECRET_PARAM_NAME });
     new cdk.CfnOutput(this, 'SessionTableName', { value: sessionTable.tableName });
   }

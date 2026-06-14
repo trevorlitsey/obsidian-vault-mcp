@@ -9,6 +9,7 @@ import {
   selectRepo,
   token,
   loadSession,
+  setSelfBaseUrl,
 } from './oauth-handlers.js';
 
 const SERVER_INFO = { name: 'obsidian-vault-mcp', version: '0.2.0' };
@@ -28,14 +29,8 @@ function jsonResponse(status: number, body: unknown, extraHeaders: Record<string
   };
 }
 
-function selfBaseUrl(): string {
-  const v = process.env.SELF_URL;
-  if (!v) throw new Error('Missing env var: SELF_URL');
-  return v.replace(/\/$/, '');
-}
-
-function unauthorized(): APIGatewayProxyResultV2 {
-  const resourceMetadata = `${selfBaseUrl()}/.well-known/oauth-protected-resource`;
+function unauthorized(baseUrl: string): APIGatewayProxyResultV2 {
+  const resourceMetadata = `${baseUrl}/.well-known/oauth-protected-resource`;
   return {
     statusCode: 401,
     headers: {
@@ -47,12 +42,12 @@ function unauthorized(): APIGatewayProxyResultV2 {
   };
 }
 
-async function handleMcp(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+async function handleMcp(event: APIGatewayProxyEventV2, baseUrl: string): Promise<APIGatewayProxyResultV2> {
   const auth = event.headers?.authorization || event.headers?.Authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return unauthorized();
+  if (!auth || !auth.startsWith('Bearer ')) return unauthorized(baseUrl);
   const accessToken = auth.slice('Bearer '.length).trim();
   const session = await loadSession(accessToken);
-  if (!session) return unauthorized();
+  if (!session) return unauthorized(baseUrl);
 
   if (event.requestContext.http.method === 'GET') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -112,6 +107,8 @@ async function handleMcp(event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   const method = event.requestContext.http.method;
   const path = event.rawPath.replace(/\/+$/, '') || '/';
+  const baseUrl = `https://${event.requestContext.domainName}`;
+  setSelfBaseUrl(baseUrl);
 
   try {
     if (path === '/.well-known/oauth-protected-resource' && method === 'GET') {
@@ -136,7 +133,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       return await token(event);
     }
     if (path === '/mcp' || path === '/') {
-      return await handleMcp(event);
+      return await handleMcp(event, baseUrl);
     }
     return { statusCode: 404, body: 'Not Found' };
   } catch (err) {

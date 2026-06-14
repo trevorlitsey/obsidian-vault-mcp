@@ -53,10 +53,15 @@ function parseForm(body: string | undefined, isBase64: boolean): Record<string, 
   return Object.fromEntries(new URLSearchParams(raw).entries());
 }
 
+let currentBaseUrl: string | undefined;
+
+export function setSelfBaseUrl(url: string): void {
+  currentBaseUrl = url.replace(/\/$/, '');
+}
+
 function selfBaseUrl(): string {
-  const v = process.env.SELF_URL;
-  if (!v) throw new Error('Missing env var: SELF_URL');
-  return v.replace(/\/$/, '');
+  if (!currentBaseUrl) throw new Error('SELF_URL not set for this request');
+  return currentBaseUrl;
 }
 
 function callbackUrl(): string {
