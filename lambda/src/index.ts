@@ -14,6 +14,22 @@ import {
 
 const SERVER_INFO = { name: 'obsidian-vault-mcp', version: '0.2.0' };
 
+const SERVER_INSTRUCTIONS = `This server exposes a GitHub-backed Obsidian vault. \
+Markdown notes live alongside images and other binary files in the same repo.
+
+When the user shares an image, photo, screenshot, or any other binary file and asks to save, \
+upload, attach, add, or store it in the vault, call write_file with encoding="base64" and the \
+file's bytes base64-encoded into content. Pick a sensible path (e.g. images/<descriptive-name>.<ext>) \
+and a clear commit message. Do not describe the image in markdown instead of saving the file itself \
+unless the user specifically asks for a written description.
+
+When reading files, image files come back as MCP image content automatically — you can view them \
+directly.
+
+Images larger than ~1MB are automatically downscaled server-side to fit within 2048x2048 before \
+being committed to the vault, so you don't need to resize on your side. If the request payload is \
+hitting transport limits (very large originals), tell the user to share a smaller copy.`;
+
 interface JsonRpcRequest {
   jsonrpc: '2.0';
   id?: string | number | null;
@@ -79,6 +95,7 @@ async function handleMcp(event: APIGatewayProxyEventV2, baseUrl: string): Promis
             protocolVersion: '2024-11-05',
             capabilities: { tools: {} },
             serverInfo: SERVER_INFO,
+            instructions: SERVER_INSTRUCTIONS,
           },
         });
       case 'tools/list':

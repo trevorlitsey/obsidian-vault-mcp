@@ -1,4 +1,9 @@
 import { Octokit } from '@octokit/rest';
+import { Jimp, JimpMime } from 'jimp';
+
+const RESIZE_MAX_DIM = 2048;
+const RESIZE_THRESHOLD_BYTES = 1_000_000;
+const JIMP_RESIZABLE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.gif']);
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
   '.png': 'image/png',
@@ -24,6 +29,30 @@ export interface VaultContext {
 function imageMimeType(filePath: string): string | undefined {
   const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0];
   return ext ? IMAGE_EXTENSIONS[ext] : undefined;
+}
+
+async function maybeDownscaleImage(buffer: Buffer, filePath: string): Promise<Buffer> {
+  const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0];
+  if (!ext || !JIMP_RESIZABLE_EXTS.has(ext)) return buffer;
+  if (buffer.length <= RESIZE_THRESHOLD_BYTES) return buffer;
+
+  const image = await Jimp.read(buffer);
+  const { width, height } = image.bitmap;
+  if (Math.max(width, height) > RESIZE_MAX_DIM) {
+    image.scaleToFit({ w: RESIZE_MAX_DIM, h: RESIZE_MAX_DIM });
+  }
+
+  const mime =
+    ext === '.png' ? JimpMime.png
+    : ext === '.gif' ? JimpMime.gif
+    : ext === '.bmp' ? JimpMime.bmp
+    : JimpMime.jpeg;
+
+  const resized = await image.getBuffer(mime);
+  console.log(
+    `Resized ${filePath}: ${buffer.length}B → ${resized.length}B (${width}x${height} → ${image.bitmap.width}x${image.bitmap.height})`,
+  );
+  return resized;
 }
 
 export const TOOLS = [
@@ -52,17 +81,17 @@ export const TOOLS = [
   {
     name: 'write_file',
     description:
-      'Create or update a file in the vault. Use encoding="utf-8" (default) for text or encoding="base64" for binary content like images.',
+      'Create or update a file in the vault. For markdown or other text, pass the text in `content` and leave encoding as utf-8. For images or other binary files (png, jpg, jpeg, gif, webp, svg, bmp, pdf, etc.), base64-encode the bytes and pass them in `content` with encoding="base64". When the user shares a photo or image and asks to save, attach, or upload it, call this tool with encoding="base64" — do not try to write the image as text or describe it instead of saving it.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'File path within the vault.' },
-        content: { type: 'string', description: 'File contents (raw text or base64-encoded binary).' },
-        message: { type: 'string', description: 'Git commit message.' },
+        path: { type: 'string', description: 'File path within the vault (e.g. "images/cat.jpg" or "notes/meeting.md").' },
+        content: { type: 'string', description: 'File contents — raw UTF-8 text or base64-encoded bytes depending on `encoding`.' },
+        message: { type: 'string', description: 'Git commit message describing the change.' },
         encoding: {
           type: 'string',
           enum: ['utf-8', 'base64'],
-          description: 'Encoding of the content field. Defaults to utf-8.',
+          description: 'Encoding of `content`. Use "base64" for images and any other binary file. Defaults to "utf-8".',
         },
       },
       required: ['path', 'content', 'message'],
@@ -133,8 +162,14 @@ async function writeFile(
     if ((err as { status?: number }).status !== 404) throw err;
   }
 
-  const base64Content =
-    encoding === 'base64' ? content : Buffer.from(content, 'utf-8').toString('base64');
+  let base64Content: string;
+  if (encoding === 'base64') {
+    const decoded = Buffer.from(content, 'base64');
+    const finalBuffer = await maybeDownscaleImage(decoded, filePath);
+    base64Content = finalBuffer.toString('base64');
+  } else {
+    base64Content = Buffer.from(content, 'utf-8').toString('base64');
+  }
 
   const { data } = await octokit.repos.createOrUpdateFileContents({
     owner: ctx.owner,

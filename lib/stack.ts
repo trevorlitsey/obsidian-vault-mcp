@@ -30,8 +30,8 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       entry: path.join(__dirname, '../lambda/src/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
-      memorySize: 512,
-      timeout: cdk.Duration.seconds(30),
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(60),
       environment: {
         GITHUB_OAUTH_CLIENT_ID: props.githubOauthClientId,
         GITHUB_OAUTH_CLIENT_SECRET_PARAM: CLIENT_SECRET_PARAM_NAME,
