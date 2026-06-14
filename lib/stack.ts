@@ -4,23 +4,26 @@ import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export interface ObsidianVaultMcpStackProps extends cdk.StackProps {
-  vaultRepoOwner: string;
-  vaultRepoName: string;
-  vaultBranch: string;
+  githubOauthClientId: string;
 }
 
 export class ObsidianVaultMcpStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ObsidianVaultMcpStackProps) {
     super(scope, id, props);
 
-    const githubTokenSecret = new secretsmanager.Secret(this, 'GitHubToken', {
-      description: 'GitHub PAT for vault repo access',
+    const githubOauthClientSecret = new secretsmanager.Secret(this, 'GitHubOAuthClientSecret', {
+      description: 'GitHub OAuth App client secret',
     });
 
-    const bearerTokenSecret = new secretsmanager.Secret(this, 'BearerToken', {
-      description: 'Bearer token clients use to call the MCP endpoint',
+    const sessionTable = new dynamodb.Table(this, 'SessionTable', {
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expires_at',
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const handler = new NodejsFunction(this, 'McpHandler', {
@@ -30,11 +33,9 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       memorySize: 512,
       timeout: cdk.Duration.seconds(30),
       environment: {
-        GITHUB_TOKEN_SECRET_ARN: githubTokenSecret.secretArn,
-        BEARER_TOKEN_SECRET_ARN: bearerTokenSecret.secretArn,
-        VAULT_REPO_OWNER: props.vaultRepoOwner,
-        VAULT_REPO_NAME: props.vaultRepoName,
-        VAULT_BRANCH: props.vaultBranch,
+        GITHUB_OAUTH_CLIENT_ID: props.githubOauthClientId,
+        GITHUB_OAUTH_CLIENT_SECRET_ARN: githubOauthClientSecret.secretArn,
+        TABLE_NAME: sessionTable.tableName,
       },
       bundling: {
         format: OutputFormat.ESM,
@@ -44,15 +45,20 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       },
     });
 
-    githubTokenSecret.grantRead(handler);
-    bearerTokenSecret.grantRead(handler);
+    githubOauthClientSecret.grantRead(handler);
+    sessionTable.grantReadWriteData(handler);
 
     const fnUrl = handler.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
+    // The Lambda needs to know its own public URL for OAuth metadata and
+    // GitHub callback construction.
+    handler.addEnvironment('SELF_URL', fnUrl.url);
+
     new cdk.CfnOutput(this, 'McpEndpoint', { value: fnUrl.url });
-    new cdk.CfnOutput(this, 'GitHubTokenSecretArn', { value: githubTokenSecret.secretArn });
-    new cdk.CfnOutput(this, 'BearerTokenSecretArn', { value: bearerTokenSecret.secretArn });
+    new cdk.CfnOutput(this, 'GitHubCallbackUrl', { value: `${fnUrl.url}callback` });
+    new cdk.CfnOutput(this, 'GitHubOAuthClientSecretArn', { value: githubOauthClientSecret.secretArn });
+    new cdk.CfnOutput(this, 'SessionTableName', { value: sessionTable.tableName });
   }
 }

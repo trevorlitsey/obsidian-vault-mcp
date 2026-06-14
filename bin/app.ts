@@ -9,9 +9,7 @@ new ObsidianVaultMcpStack(app, 'ObsidianVaultMcpStack', {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
-  vaultRepoOwner: requireEnv('VAULT_REPO_OWNER'),
-  vaultRepoName: requireEnv('VAULT_REPO_NAME'),
-  vaultBranch: process.env.VAULT_BRANCH ?? 'main',
+  githubOauthClientId: requireEnv('GITHUB_OAUTH_CLIENT_ID'),
 });
 
 function requireEnv(name: string): string {
