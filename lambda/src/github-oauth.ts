@@ -66,7 +66,8 @@ export async function listUserRepos(token: string): Promise<RepoChoice[]> {
   for await (const page of octokit.paginate.iterator(octokit.repos.listForAuthenticatedUser, {
     per_page: 100,
     sort: 'updated',
-    affiliation: 'owner,collaborator',
+    affiliation: 'owner,collaborator,organization_member',
+    visibility: 'all',
   })) {
     for (const r of page.data) {
       out.push({
