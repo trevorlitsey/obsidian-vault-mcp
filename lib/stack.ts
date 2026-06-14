@@ -3,20 +3,18 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export interface ObsidianVaultMcpStackProps extends cdk.StackProps {
   githubOauthClientId: string;
 }
 
+const CLIENT_SECRET_PARAM_NAME = '/obsidian-vault-mcp/github-oauth-client-secret';
+
 export class ObsidianVaultMcpStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ObsidianVaultMcpStackProps) {
     super(scope, id, props);
-
-    const githubOauthClientSecret = new secretsmanager.Secret(this, 'GitHubOAuthClientSecret', {
-      description: 'GitHub OAuth App client secret',
-    });
 
     const sessionTable = new dynamodb.Table(this, 'SessionTable', {
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
@@ -34,7 +32,7 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       environment: {
         GITHUB_OAUTH_CLIENT_ID: props.githubOauthClientId,
-        GITHUB_OAUTH_CLIENT_SECRET_ARN: githubOauthClientSecret.secretArn,
+        GITHUB_OAUTH_CLIENT_SECRET_PARAM: CLIENT_SECRET_PARAM_NAME,
         TABLE_NAME: sessionTable.tableName,
       },
       bundling: {
@@ -45,20 +43,38 @@ export class ObsidianVaultMcpStack extends cdk.Stack {
       },
     });
 
-    githubOauthClientSecret.grantRead(handler);
     sessionTable.grantReadWriteData(handler);
+
+    handler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter${CLIENT_SECRET_PARAM_NAME}`,
+        ],
+      }),
+    );
+
+    // The SSM parameter is stored as a SecureString encrypted with the
+    // AWS-managed key alias/aws/ssm. Grant Decrypt scoped to that use.
+    handler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['kms:Decrypt'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: { 'kms:ViaService': `ssm.${this.region}.amazonaws.com` },
+        },
+      }),
+    );
 
     const fnUrl = handler.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
-    // The Lambda needs to know its own public URL for OAuth metadata and
-    // GitHub callback construction.
     handler.addEnvironment('SELF_URL', fnUrl.url);
 
     new cdk.CfnOutput(this, 'McpEndpoint', { value: fnUrl.url });
     new cdk.CfnOutput(this, 'GitHubCallbackUrl', { value: `${fnUrl.url}callback` });
-    new cdk.CfnOutput(this, 'GitHubOAuthClientSecretArn', { value: githubOauthClientSecret.secretArn });
+    new cdk.CfnOutput(this, 'GitHubOAuthClientSecretParam', { value: CLIENT_SECRET_PARAM_NAME });
     new cdk.CfnOutput(this, 'SessionTableName', { value: sessionTable.tableName });
   }
 }

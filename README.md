@@ -54,19 +54,20 @@ The stack prints:
 - `McpEndpoint` — the URL clients connect to
 - `GitHubCallbackUrl` — paste this back into the OAuth App's "Authorization
   callback URL" field
-- `GitHubOAuthClientSecretArn` — where to store the OAuth App's client secret
+- `GitHubOAuthClientSecretParam` — the SSM Parameter Store name where the
+  OAuth App's client secret must be stored
 - `SessionTableName` — the DynamoDB table holding sessions, codes, and tokens
 
-Set the OAuth App client secret:
+Set the OAuth App client secret in SSM Parameter Store:
 
 ```bash
-aws secretsmanager put-secret-value \
-  --secret-id "$(aws cloudformation describe-stacks \
-      --stack-name ObsidianVaultMcpStack \
-      --query 'Stacks[0].Outputs[?OutputKey==`GitHubOAuthClientSecretArn`].OutputValue' \
-      --output text)" \
-  --secret-string 'your_oauth_app_client_secret'
+aws ssm put-parameter \
+  --name /obsidian-vault-mcp/github-oauth-client-secret \
+  --value 'your_oauth_app_client_secret' \
+  --type SecureString
 ```
+
+(Use `--overwrite` if you ever need to rotate it.)
 
 ## Client setup
 

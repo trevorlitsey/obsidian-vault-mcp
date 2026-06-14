@@ -1,7 +1,7 @@
 import { Octokit } from '@octokit/rest';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
-const secretsClient = new SecretsManagerClient({});
+const ssm = new SSMClient({});
 
 let cachedClientSecret: string | undefined;
 
@@ -13,11 +13,11 @@ export function clientId(): string {
 
 async function clientSecret(): Promise<string> {
   if (cachedClientSecret) return cachedClientSecret;
-  const arn = process.env.GITHUB_OAUTH_CLIENT_SECRET_ARN;
-  if (!arn) throw new Error('Missing env var: GITHUB_OAUTH_CLIENT_SECRET_ARN');
-  const result = await secretsClient.send(new GetSecretValueCommand({ SecretId: arn }));
-  if (!result.SecretString) throw new Error('OAuth client secret has no SecretString');
-  cachedClientSecret = result.SecretString;
+  const name = process.env.GITHUB_OAUTH_CLIENT_SECRET_PARAM;
+  if (!name) throw new Error('Missing env var: GITHUB_OAUTH_CLIENT_SECRET_PARAM');
+  const result = await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }));
+  if (!result.Parameter?.Value) throw new Error(`SSM parameter ${name} has no value`);
+  cachedClientSecret = result.Parameter.Value;
   return cachedClientSecret;
 }
 
