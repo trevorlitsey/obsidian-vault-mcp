@@ -69,6 +69,32 @@ aws ssm put-parameter \
 
 (Use `--overwrite` if you ever need to rotate it.)
 
+## Continuous deploy via GitHub Actions
+
+The repo ships with `.github/workflows/deploy.yml` which runs `cdk deploy` on
+every push to `main`, authenticating to AWS via GitHub OIDC (no long-lived
+access keys in GitHub secrets).
+
+One-time setup:
+
+1. Deploy the OIDC stack with local credentials:
+   ```bash
+   npx cdk deploy ObsidianVaultMcpOidcStack
+   ```
+   If your account already has a GitHub Actions OIDC provider, pass the
+   existing ARN:
+   ```bash
+   npx cdk deploy ObsidianVaultMcpOidcStack \
+     -c existingGitHubOidcProviderArn=arn:aws:iam::<acct>:oidc-provider/token.actions.githubusercontent.com
+   ```
+2. Copy the `DeployRoleArn` output.
+3. In the GitHub repo's Settings → Secrets and variables → Actions:
+   - **Secret** `AWS_DEPLOY_ROLE_ARN` = the role ARN from step 2
+   - **Variable** `AWS_REGION` = the region you're deploying to
+   - **Variable** `GITHUB_OAUTH_CLIENT_ID` = your OAuth App's Client ID
+
+After that, every push to `main` triggers a deploy.
+
 ## Client setup
 
 In any MCP client that supports remote MCP + OAuth, add the `McpEndpoint` URL

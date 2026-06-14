@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { ObsidianVaultMcpStack } from '../lib/stack';
+import { GitHubOidcStack } from '../lib/github-oidc-stack';
 
 const app = new cdk.App();
 
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: process.env.CDK_DEFAULT_REGION,
+};
+
 new ObsidianVaultMcpStack(app, 'ObsidianVaultMcpStack', {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+  env,
   githubOauthClientId: requireEnv('GITHUB_OAUTH_CLIENT_ID'),
+});
+
+new GitHubOidcStack(app, 'ObsidianVaultMcpOidcStack', {
+  env,
+  githubOrg: process.env.GITHUB_OIDC_ORG ?? 'trevorlitsey',
+  githubRepo: process.env.GITHUB_OIDC_REPO ?? 'obsidian-vault-mcp',
+  existingOidcProviderArn: app.node.tryGetContext('existingGitHubOidcProviderArn'),
 });
 
 function requireEnv(name: string): string {
