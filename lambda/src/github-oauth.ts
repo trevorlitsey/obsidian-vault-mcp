@@ -63,23 +63,30 @@ export interface RepoChoice {
 export async function listUserRepos(token: string): Promise<RepoChoice[]> {
   const octokit = new Octokit({ auth: token });
   const out: RepoChoice[] = [];
-  for await (const page of octokit.paginate.iterator(octokit.repos.listForAuthenticatedUser, {
-    per_page: 100,
-    sort: 'updated',
-    affiliation: 'owner,collaborator,organization_member',
-    visibility: 'all',
-  })) {
-    for (const r of page.data) {
-      out.push({
-        full_name: r.full_name,
-        owner: r.owner.login,
-        name: r.name,
-        default_branch: r.default_branch ?? 'main',
-        private: r.private,
-      });
+
+  const { data: instData } = await octokit.request('GET /user/installations', { per_page: 100 });
+  for (const inst of instData.installations ?? []) {
+    let page = 1;
+    while (true) {
+      const { data } = await octokit.request(
+        'GET /user/installations/{installation_id}/repositories',
+        { installation_id: inst.id, per_page: 100, page },
+      );
+      for (const r of data.repositories ?? []) {
+        out.push({
+          full_name: r.full_name,
+          owner: r.owner.login,
+          name: r.name,
+          default_branch: r.default_branch ?? 'main',
+          private: r.private,
+        });
+      }
+      if ((data.repositories?.length ?? 0) < 100) break;
+      page++;
     }
-    if (out.length >= 200) break;
   }
+
+  console.log(`listUserRepos: ${out.length} repos from ${instData.installations?.length ?? 0} installations`);
   return out;
 }
 
