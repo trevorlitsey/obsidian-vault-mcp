@@ -26,9 +26,8 @@ unless the user specifically asks for a written description.
 When reading files, image files come back as MCP image content automatically — you can view them \
 directly.
 
-Images larger than ~1MB are automatically downscaled server-side to fit within 2048x2048 before \
-being committed to the vault, so you don't need to resize on your side. If the request payload is \
-hitting transport limits (very large originals), tell the user to share a smaller copy.`;
+The request payload limit is ~10MB, so for very large originals (multi-MP phone photos), tell the \
+user to share a smaller copy or downscale it yourself before encoding.`;
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';

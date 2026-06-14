@@ -1,9 +1,4 @@
 import { Octokit } from '@octokit/rest';
-import { Jimp, JimpMime } from 'jimp';
-
-const RESIZE_MAX_DIM = 2048;
-const RESIZE_THRESHOLD_BYTES = 1_000_000;
-const JIMP_RESIZABLE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.gif']);
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
   '.png': 'image/png',
@@ -29,30 +24,6 @@ export interface VaultContext {
 function imageMimeType(filePath: string): string | undefined {
   const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0];
   return ext ? IMAGE_EXTENSIONS[ext] : undefined;
-}
-
-async function maybeDownscaleImage(buffer: Buffer, filePath: string): Promise<Buffer> {
-  const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0];
-  if (!ext || !JIMP_RESIZABLE_EXTS.has(ext)) return buffer;
-  if (buffer.length <= RESIZE_THRESHOLD_BYTES) return buffer;
-
-  const image = await Jimp.read(buffer);
-  const { width, height } = image.bitmap;
-  if (Math.max(width, height) > RESIZE_MAX_DIM) {
-    image.scaleToFit({ w: RESIZE_MAX_DIM, h: RESIZE_MAX_DIM });
-  }
-
-  const mime =
-    ext === '.png' ? JimpMime.png
-    : ext === '.gif' ? JimpMime.gif
-    : ext === '.bmp' ? JimpMime.bmp
-    : JimpMime.jpeg;
-
-  const resized = await image.getBuffer(mime);
-  console.log(
-    `Resized ${filePath}: ${buffer.length}B → ${resized.length}B (${width}x${height} → ${image.bitmap.width}x${image.bitmap.height})`,
-  );
-  return resized;
 }
 
 export const TOOLS = [
@@ -162,14 +133,8 @@ async function writeFile(
     if ((err as { status?: number }).status !== 404) throw err;
   }
 
-  let base64Content: string;
-  if (encoding === 'base64') {
-    const decoded = Buffer.from(content, 'base64');
-    const finalBuffer = await maybeDownscaleImage(decoded, filePath);
-    base64Content = finalBuffer.toString('base64');
-  } else {
-    base64Content = Buffer.from(content, 'utf-8').toString('base64');
-  }
+  const base64Content =
+    encoding === 'base64' ? content : Buffer.from(content, 'utf-8').toString('base64');
 
   const { data } = await octokit.repos.createOrUpdateFileContents({
     owner: ctx.owner,
