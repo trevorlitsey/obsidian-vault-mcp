@@ -14,20 +14,28 @@ import {
 
 const SERVER_INFO = { name: 'obsidian-vault-mcp', version: '0.2.0' };
 
-const SERVER_INSTRUCTIONS = `This server exposes a GitHub-backed Obsidian vault. \
-Markdown notes live alongside images and other binary files in the same repo.
+const SERVER_INSTRUCTIONS = `This server exposes a GitHub-backed Obsidian vault. Markdown notes \
+live alongside images and other binary files in the same repo.
 
-When the user shares an image, photo, screenshot, or any other binary file and asks to save, \
-upload, attach, add, or store it in the vault, call write_file with encoding="base64" and the \
-file's bytes base64-encoded into content. Pick a sensible path (e.g. images/<descriptive-name>.<ext>) \
-and a clear commit message. Do not describe the image in markdown instead of saving the file itself \
-unless the user specifically asks for a written description.
+IMAGE HANDLING — this is important:
 
-When reading files, image files come back as MCP image content automatically — you can view them \
-directly.
+- Always save images as SEPARATE binary files in the vault. Never embed base64 image data inline \
+  inside a markdown file.
+- To attach a photo or screenshot to a note: (1) call write_file with the image bytes (encoding="base64", \
+  path like "attachments/<descriptive-name>.<ext>"); (2) reference it from the markdown note using \
+  Obsidian wikilink syntax: ![[<descriptive-name>.<ext>]] — or standard markdown ![alt](attachments/<file>) \
+  if you prefer. The user's Obsidian app will render the image when they open the note.
+- One write_file call per image; one more write_file call to create or update the markdown note that \
+  references it. Pick a sensible attachments folder (default to "attachments/" unless the user has \
+  a different convention visible in the vault).
+- When reading files, image files come back as MCP image content automatically — you can view them \
+  directly.
 
 The request payload limit is ~10MB, so for very large originals (multi-MP phone photos), tell the \
-user to share a smaller copy or downscale it yourself before encoding.`;
+user to share a smaller copy or downscale it yourself before encoding.
+
+If a tool call to write_file with encoding="base64" fails with a size or payload error, the image is \
+too large to upload — ask the user for a smaller version rather than retrying.`;
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';
