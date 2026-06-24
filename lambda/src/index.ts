@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { callTool, TOOLS, type VaultContext } from './mcp-tools.js';
+import { isGitHubAuthError } from './github-oauth.js';
 import {
   oauthProtectedResource,
   oauthAuthorizationServer,
@@ -123,6 +124,16 @@ async function handleMcp(event: APIGatewayProxyEventV2, baseUrl: string): Promis
         });
     }
   } catch (err) {
+    if (isGitHubAuthError(err)) {
+      return jsonResponse(200, {
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32001,
+          message: 'GitHub authorization for the selected vault repo is no longer valid. Please reconnect this MCP server.',
+        },
+      });
+    }
     const message = err instanceof Error ? err.message : String(err);
     return jsonResponse(200, { jsonrpc: '2.0', id, error: { code: -32000, message } });
   }

@@ -10,10 +10,15 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-new ObsidianVaultMcpStack(app, 'ObsidianVaultMcpStack', {
-  env,
-  githubOauthClientId: requireEnv('GITHUB_OAUTH_CLIENT_ID'),
-});
+const requestedStacks = app.node.tryGetContext('stacks') as string | undefined;
+const shouldDefineMcpStack = !requestedStacks || requestedStacks.split(',').includes('ObsidianVaultMcpStack');
+
+if (shouldDefineMcpStack) {
+  new ObsidianVaultMcpStack(app, 'ObsidianVaultMcpStack', {
+    env,
+    githubOauthClientId: requireEnv('GITHUB_OAUTH_CLIENT_ID'),
+  });
+}
 
 new GitHubOidcStack(app, 'ObsidianVaultMcpOidcStack', {
   env,

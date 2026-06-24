@@ -17,6 +17,8 @@ import {
   exchangeCodeForToken,
   listUserRepos,
   getRepoDefaultBranch,
+  verifyRepoAccess,
+  isGitHubAuthError,
 } from './github-oauth.js';
 import { renderRepoPicker } from './repo-picker.js';
 
@@ -278,6 +280,20 @@ async function exchangeRefreshToken(form: Record<string, string>): Promise<APIGa
   if (!refreshToken || !clientId) return json(400, { error: 'invalid_request' });
   const record = await getItem<RefreshRecord>(`REFRESH#${refreshToken}`);
   if (!record || record.client_id !== clientId) return json(400, { error: 'invalid_grant' });
+
+  try {
+    await verifyRepoAccess(record.github_token, record.repo_owner, record.repo_name);
+  } catch (err) {
+    if (isGitHubAuthError(err)) {
+      await deleteItem(`REFRESH#${refreshToken}`);
+      return json(400, {
+        error: 'invalid_grant',
+        error_description: 'GitHub authorization for the selected vault repo is no longer valid. Please reconnect this MCP server.',
+      });
+    }
+    throw err;
+  }
+
   await deleteItem(`REFRESH#${refreshToken}`);
 
   return issueTokens({

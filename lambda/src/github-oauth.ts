@@ -95,3 +95,13 @@ export async function getRepoDefaultBranch(token: string, owner: string, name: s
   const { data } = await octokit.repos.get({ owner, repo: name });
   return data.default_branch;
 }
+
+export async function verifyRepoAccess(token: string, owner: string, name: string): Promise<void> {
+  const octokit = new Octokit({ auth: token });
+  await octokit.repos.get({ owner, repo: name });
+}
+
+export function isGitHubAuthError(err: unknown): boolean {
+  const status = (err as { status?: number }).status;
+  return status === 401 || status === 403;
+}

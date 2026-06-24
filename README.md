@@ -91,7 +91,7 @@ One-time setup:
 3. In the GitHub repo's Settings → Secrets and variables → Actions:
    - **Secret** `AWS_DEPLOY_ROLE_ARN` = the role ARN from step 2
    - **Variable** `AWS_REGION` = the region you're deploying to
-   - **Variable** `GITHUB_OAUTH_CLIENT_ID` = your OAuth App's Client ID
+   - **Variable** `OAUTH_CLIENT_ID` = your OAuth App's Client ID
 
 After that, every push to `main` triggers a deploy.
 

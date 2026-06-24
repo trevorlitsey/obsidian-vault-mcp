@@ -30,6 +30,13 @@ jobs:
         run: npm install
         working-directory: lambda
 
+      - name: Typecheck root
+        run: npm run build
+
+      - name: Typecheck Lambda
+        run: npx tsc --noEmit
+        working-directory: lambda
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -38,4 +45,7 @@ jobs:
       - name: cdk deploy
         run: npx cdk deploy ObsidianVaultMcpStack --require-approval never
         env:
-          GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+          GITHUB_OAUTH_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
+
+      - name: Smoke test live MCP endpoint
+        run: node scripts/smoke-live-mcp.mjs
